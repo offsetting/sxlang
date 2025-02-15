@@ -1,10 +1,13 @@
+#![feature(seek_stream_len)]
+
 mod opcodes;
 mod structs;
 
-use std::io::Seek;
+use std::io::{Read, Seek};
 
 use crate::opcodes::*;
 use binrw::*;
+use structs::*;
 
 #[binrw::parser(reader: r, endian)]
 fn read_instructions(opcode_count: u32) -> binrw::BinResult<Vec<Instruction>> {
@@ -138,6 +141,7 @@ fn read_instructions(opcode_count: u32) -> binrw::BinResult<Vec<Instruction>> {
 }
 
 #[binrw(little)]
+#[derive(Debug)]
 struct Header {
     pub magic: u32,
     pub version: u32,
@@ -165,25 +169,56 @@ struct Header {
     pub label_lookup_offset: u32,
     pub switch_tables_offset: u32,
     pub string_table_offset: u32,
+
     #[br(parse_with = read_instructions, args(opcode_count))]
     pub instrctions: Vec<Instruction>,
-    /*
-    SlangInstruction opcodes[opcode_count];
-    SlangDebugInfo debug_infos[debug_info_count];
-    SlangVariable variables[variable_count];
-    SlangStaticVariable statics[static_count];
-    SlangUnk unks[unk_count];
-    SlangFunction functions[function_count];
-    SlangVariableLookup variable_lookups[variable_lookup_count];
-    SlangLabelLookup label_lookups[label_lookup_count];
-    SlangSwitchTable switch_tables[switch_table_count];
-    u32 strings[string_count];
-    */
+
+    #[br(count = debug_info_count)]
+    pub debug_infos: Vec<DebugInfo>,
+
+    #[br(count = variable_count)]
+    pub variables: Vec<Variable>,
+
+    #[br(count = static_count)]
+    pub static_variables: Vec<StaticVariable>,
+
+    #[br(count = unk_count)]
+    pub unks: Vec<Unk>,
+
+    #[br(count = function_count)]
+    pub functions: Vec<Function>,
+
+    #[br(count = variable_lookup_count)]
+    pub variable_lookups: Vec<VariableLookup>,
+
+    #[br(count = label_lookup_count)]
+    pub label_lookups: Vec<LabelLookup>,
+
+    #[br(count = switch_table_count)]
+    pub switch_tables: Vec<SwitchTable>,
+
+    #[br(count = string_count)]
+    pub string_offsets: Vec<u32>,
+}
+
+const NULL_BYTE: u8 = b'\0';
+
+pub(crate) fn read_cstr(input: &[u8]) -> String {
+    let mut output = String::new();
+
+    for c in input {
+        if c == &NULL_BYTE {
+            return output;
+        }
+        output.push(*c as char);
+    }
+
+    output
 }
 
 fn main() {
-    let mut script_file = std::fs::File::open("../genericanimatoranim.sx").unwrap();
+    let mut script_file = std::fs::File::open("../cloth.sx").unwrap();
     let script = Header::read_le(&mut script_file).unwrap();
-    dbg!(script.instrctions);
+    dbg!(script);
     dbg!(script_file.stream_position().unwrap());
 }
